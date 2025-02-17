@@ -93,7 +93,8 @@ def fetch_emails():
     end_date_str = end_date.strftime("%d-%b-%Y")
     
     status_placeholder.info("Searching for DTC emails within selected date range...")
-    search_criteria = f'(OR (FROM "notify@onestepgps.com") (SUBJECT "DTC (Diagnostic Trouble Codes)")) SINCE "{start_date_str}" BEFORE "{end_date_str}"'
+    # Updated search criteria to match actual email subjects
+    search_criteria = f'(OR SUBJECT "DTC Detected" SUBJECT "Steerling Tractor - DTC") SINCE "{start_date_str}" BEFORE "{end_date_str}"'
     status, messages = mail.search(None, search_criteria)
     email_ids = messages[0].split()
     
