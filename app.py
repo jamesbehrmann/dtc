@@ -14,7 +14,7 @@ EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
 # Initialize OpenAI client
-client = openai(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Sidebar setup
 st.sidebar.title("FLEET NEXIS DTC INTERPRETER")
