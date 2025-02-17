@@ -3,5 +3,4 @@ openai
 imapclient
 email-validator
 python-dotenv
-sqlite3
 pandas
