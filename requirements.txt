@@ -1,6 +1,0 @@
-streamlit
-openai
-imapclient
-email-validator
-python-dotenv
-pandas
