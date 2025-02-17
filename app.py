@@ -93,8 +93,8 @@ def fetch_emails():
     end_date_str = end_date.strftime("%d-%b-%Y")
     
     status_placeholder.info("Searching for DTC emails within selected date range...")
-    # Updated search criteria to match actual email subjects
-    search_criteria = f'(OR SUBJECT "DTC Detected" SUBJECT "Steerling Tractor - DTC") SINCE "{start_date_str}" BEFORE "{end_date_str}"'
+    # Updated search criteria to only look for "DTC" in subject
+    search_criteria = f'(SUBJECT "DTC") SINCE "{start_date_str}" BEFORE "{end_date_str}"'
     status, messages = mail.search(None, search_criteria)
     email_ids = messages[0].split()
     
@@ -151,7 +151,7 @@ def interpret_dtc(dtc_text, status_placeholder):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an expert vehicle diagnostic assistant."},
+                {"role": "system", "content": "You are an expert vehicle diagnostic assistant. Provide direct interpretations without disclaimers or recommendations to consult mechanics."},
                 {"role": "user", "content": f"What do these diagnostic trouble codes mean: {dtc_text}?"}
             ]
         )
@@ -175,7 +175,7 @@ def save_to_db(vehicle_name, dtc_text, ai_interpretation, gps_coordinates, locat
 
 # Display DTC entry
 def display_dtc_entry(entry, show_raw=False):
-    st.markdown(f"### 🚗 {entry['vehicle_name']}")
+    st.markdown(f"### {entry['vehicle_name']}")
     if 'timestamp' in entry:  # Only show timestamp for database entries
         st.markdown(f"**Date:** {entry['timestamp']}")
     st.markdown("**Interpretation:**")
