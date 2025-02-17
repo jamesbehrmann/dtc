@@ -93,13 +93,14 @@ def fetch_emails():
     end_date_str = end_date.strftime("%d-%b-%Y")
     
     status_placeholder.info("Searching for DTC emails within selected date range...")
-    # Updated search criteria to match exact DTC phrase
-    search_criteria = f'(SUBJECT "DTC (Diagnostic Trouble Codes)") SINCE "{start_date_str}" BEFORE "{end_date_str}"'
+    
+    # First, get all emails in the date range
+    search_criteria = f'SINCE "{start_date_str}" BEFORE "{end_date_str}"'
     status, messages = mail.search(None, search_criteria)
     email_ids = messages[0].split()
     
     if not email_ids:
-        status_placeholder.warning("No DTC emails found in the selected date range.")
+        status_placeholder.warning("No emails found in the selected date range.")
         return []
     
     status_placeholder.info(f"Processing {len(email_ids)} emails...")
@@ -110,22 +111,25 @@ def fetch_emails():
         for response_part in msg_data:
             if isinstance(response_part, tuple):
                 msg = email.message_from_bytes(response_part[1])
-                email_body = ""
-                if msg.is_multipart():
-                    for part in msg.walk():
-                        if part.get_content_type() == "text/plain":
-                            email_body = part.get_payload(decode=True).decode()
-                            break
-                else:
-                    email_body = msg.get_payload(decode=True).decode()
-                
-                entry = extract_dtc_info(email_body)
-                if entry:
-                    entry["raw_email"] = email_body
-                    dtc_entries.append(entry)
+                # Check if subject contains our target phrase
+                subject = msg.get('subject', '')
+                if "DTC (Diagnostic Trouble Codes)" in subject:
+                    email_body = ""
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            if part.get_content_type() == "text/plain":
+                                email_body = part.get_payload(decode=True).decode()
+                                break
+                    else:
+                        email_body = msg.get_payload(decode=True).decode()
+                    
+                    entry = extract_dtc_info(email_body)
+                    if entry:
+                        entry["raw_email"] = email_body
+                        dtc_entries.append(entry)
     
     mail.logout()
-    status_placeholder.success("Email processing complete!")
+    status_placeholder.success(f"Email processing complete! Found {len(dtc_entries)} DTC emails.")
     return dtc_entries
 
 # Extract DTC info from email body
