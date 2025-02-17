@@ -82,7 +82,7 @@ def init_db():
 # Fetch emails via IMAP
 def fetch_emails():
     status_placeholder = st.empty()
-    debug_placeholder = st.empty()  # New placeholder for debug info
+    debug_placeholder = st.empty()
     status_placeholder.info("Connecting to email server...")
     
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, 993)
@@ -93,10 +93,10 @@ def fetch_emails():
     start_date_str = start_date.strftime("%d-%b-%Y")
     end_date_str = end_date.strftime("%d-%b-%Y")
     
-    status_placeholder.info("Searching for DTC emails within selected date range...")
+    status_placeholder.info("Searching for emails from notify@onestepgps.com...")
     
-    # First, get all emails in the date range
-    search_criteria = f'SINCE "{start_date_str}" BEFORE "{end_date_str}"'
+    # Search for emails from specific sender within date range
+    search_criteria = f'(FROM "notify@onestepgps.com") SINCE "{start_date_str}" BEFORE "{end_date_str}"'
     status, messages = mail.search(None, search_criteria)
     email_ids = messages[0].split()
     
@@ -106,7 +106,7 @@ def fetch_emails():
     
     status_placeholder.info(f"Processing {len(email_ids)} emails...")
     dtc_entries = []
-    debug_info = []  # List to store debug information
+    debug_info = []
     
     for e_id in email_ids:
         status, msg_data = mail.fetch(e_id, "(RFC822)")
@@ -114,31 +114,29 @@ def fetch_emails():
             if isinstance(response_part, tuple):
                 msg = email.message_from_bytes(response_part[1])
                 subject = msg.get('subject', '')
-                debug_info.append(f"Found email with subject: {subject}")
+                debug_info.append(f"Processing email with subject: {subject}")
                 
-                # Check for DTC in a more flexible way
-                if "DTC" in subject:
-                    email_body = ""
-                    if msg.is_multipart():
-                        for part in msg.walk():
-                            if part.get_content_type() == "text/plain":
-                                email_body = part.get_payload(decode=True).decode()
-                                break
-                    else:
-                        email_body = msg.get_payload(decode=True).decode()
-                    
-                    entry = extract_dtc_info(email_body)
-                    if entry:
-                        entry["raw_email"] = email_body
-                        dtc_entries.append(entry)
-                        debug_info.append(f"Successfully processed DTC email: {subject}")
+                email_body = ""
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        if part.get_content_type() == "text/plain":
+                            email_body = part.get_payload(decode=True).decode()
+                            break
+                else:
+                    email_body = msg.get_payload(decode=True).decode()
+                
+                entry = extract_dtc_info(email_body)
+                if entry:
+                    entry["raw_email"] = email_body
+                    dtc_entries.append(entry)
+                    debug_info.append(f"Successfully processed email: {subject}")
     
     # Display debug information
     with st.expander("Debug Information"):
         st.write("\n".join(debug_info))
     
     mail.logout()
-    status_placeholder.success(f"Email processing complete! Found {len(dtc_entries)} DTC emails.")
+    status_placeholder.success(f"Email processing complete! Found {len(dtc_entries)} emails.")
     return dtc_entries
 
 # Extract DTC info from email body
