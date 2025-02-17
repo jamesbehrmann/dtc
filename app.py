@@ -2,7 +2,7 @@ import streamlit as st
 import imaplib
 import email
 import sqlite3
-import OpenAI
+import openai
 import re
 import pandas as pd
 from datetime import datetime
@@ -14,7 +14,7 @@ EMAIL_PASSWORD = st.secrets["EMAIL_PASSWORD"]
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
 # Initialize OpenAI client
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = openai(api_key=OPENAI_API_KEY)
 
 # Sidebar setup
 st.sidebar.title("FLEET NEXIS DTC INTERPRETER")
