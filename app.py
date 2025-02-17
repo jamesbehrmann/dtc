@@ -82,6 +82,7 @@ def init_db():
 # Fetch emails via IMAP
 def fetch_emails():
     status_placeholder = st.empty()
+    debug_placeholder = st.empty()  # New placeholder for debug info
     status_placeholder.info("Connecting to email server...")
     
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, 993)
@@ -105,15 +106,18 @@ def fetch_emails():
     
     status_placeholder.info(f"Processing {len(email_ids)} emails...")
     dtc_entries = []
+    debug_info = []  # List to store debug information
     
     for e_id in email_ids:
         status, msg_data = mail.fetch(e_id, "(RFC822)")
         for response_part in msg_data:
             if isinstance(response_part, tuple):
                 msg = email.message_from_bytes(response_part[1])
-                # Check if subject contains our target phrase
                 subject = msg.get('subject', '')
-                if "DTC (Diagnostic Trouble Codes)" in subject:
+                debug_info.append(f"Found email with subject: {subject}")
+                
+                # Check for DTC in a more flexible way
+                if "DTC" in subject:
                     email_body = ""
                     if msg.is_multipart():
                         for part in msg.walk():
@@ -127,6 +131,11 @@ def fetch_emails():
                     if entry:
                         entry["raw_email"] = email_body
                         dtc_entries.append(entry)
+                        debug_info.append(f"Successfully processed DTC email: {subject}")
+    
+    # Display debug information
+    with st.expander("Debug Information"):
+        st.write("\n".join(debug_info))
     
     mail.logout()
     status_placeholder.success(f"Email processing complete! Found {len(dtc_entries)} DTC emails.")
