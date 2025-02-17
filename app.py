@@ -93,8 +93,8 @@ def fetch_emails():
     end_date_str = end_date.strftime("%d-%b-%Y")
     
     status_placeholder.info("Searching for DTC emails within selected date range...")
-    # Updated search criteria to only look for "DTC" in subject
-    search_criteria = f'(SUBJECT "DTC") SINCE "{start_date_str}" BEFORE "{end_date_str}"'
+    # Updated search criteria to match exact DTC phrase
+    search_criteria = f'(SUBJECT "DTC (Diagnostic Trouble Codes)") SINCE "{start_date_str}" BEFORE "{end_date_str}"'
     status, messages = mail.search(None, search_criteria)
     email_ids = messages[0].split()
     
