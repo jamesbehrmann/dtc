@@ -7,6 +7,17 @@ import re
 import pandas as pd
 from datetime import datetime
 
+# Page configuration
+st.set_page_config(layout="wide", initial_sidebar_state="expanded")
+st.markdown("""
+    <style>
+        .stApp {
+            background-color: #0E1117;
+            color: white;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # Configuration
 IMAP_SERVER = "imap.ionos.com"
 EMAIL_USER = st.secrets["EMAIL_USER"]
@@ -18,6 +29,11 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Sidebar setup
 st.sidebar.title("FLEET NEXIS DTC INTERPRETER")
+st.sidebar.divider()
+
+# Add date pickers
+start_date = st.sidebar.date_input("Start Date", datetime.now().replace(day=1))
+end_date = st.sidebar.date_input("End Date", datetime.now())
 st.sidebar.divider()
 
 # Database initialization and migration
@@ -72,18 +88,23 @@ def fetch_emails():
     mail.login(EMAIL_USER, EMAIL_PASSWORD)
     mail.select("inbox")
     
-    status_placeholder.info("Searching for emails with subject 'DTC Detected'...")
-    status, messages = mail.search(None, '(SUBJECT "DTC Detected")')
+    # Convert dates to the format required by IMAP
+    start_date_str = start_date.strftime("%d-%b-%Y")
+    end_date_str = end_date.strftime("%d-%b-%Y")
+    
+    status_placeholder.info("Searching for DTC emails within selected date range...")
+    search_criteria = f'(OR (FROM "notify@onestepgps.com") (SUBJECT "DTC (Diagnostic Trouble Codes)")) SINCE "{start_date_str}" BEFORE "{end_date_str}"'
+    status, messages = mail.search(None, search_criteria)
     email_ids = messages[0].split()
     
     if not email_ids:
-        status_placeholder.warning("No new DTC emails found.")
+        status_placeholder.warning("No DTC emails found in the selected date range.")
         return []
     
     status_placeholder.info(f"Processing {len(email_ids)} emails...")
     dtc_entries = []
     
-    for e_id in email_ids[-5:]:  # Fetch last 5 emails for testing
+    for e_id in email_ids:
         status, msg_data = mail.fetch(e_id, "(RFC822)")
         for response_part in msg_data:
             if isinstance(response_part, tuple):
@@ -207,15 +228,22 @@ if fetch_analyze:
 if show_history:
     st.subheader("DTC History")
     conn = sqlite3.connect("dtc_logs.db")
+    query = """
+        SELECT * FROM dtc_logs 
+        WHERE DATE(timestamp) BETWEEN ? AND ?
+        ORDER BY timestamp DESC
+    """
     df = pd.read_sql_query(
-        "SELECT * FROM dtc_logs ORDER BY timestamp DESC LIMIT 10", 
+        query, 
         conn,
+        params=(start_date, end_date),
         parse_dates=['timestamp']
     )
     conn.close()
 
     if not df.empty:
+        st.info(f"Showing {len(df)} entries between {start_date} and {end_date}")
         for _, row in df.iterrows():
             display_dtc_entry(row, show_raw)
     else:
-        st.info("No DTC history found in the database.")
+        st.info(f"No DTC history found between {start_date} and {end_date}")
