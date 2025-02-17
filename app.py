@@ -2,7 +2,7 @@ import streamlit as st
 import imaplib
 import email
 import sqlite3
-from openai import OpenAI
+import OpenAI
 import re
 import pandas as pd
 from datetime import datetime
