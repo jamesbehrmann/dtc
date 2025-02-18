@@ -6,6 +6,7 @@ from openai import OpenAI
 import re
 import pandas as pd
 from datetime import datetime, timedelta
+from email.utils import parsedate_to_datetime
 
 # Page configuration
 st.set_page_config(layout="wide", initial_sidebar_state="expanded")
@@ -27,6 +28,15 @@ OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 # Initialize OpenAI client
 client = OpenAI(api_key=OPENAI_API_KEY)
 
+# Get unique vehicles for filtering
+def get_unique_vehicles():
+    conn = sqlite3.connect("dtc_logs.db")
+    c = conn.cursor()
+    c.execute("SELECT DISTINCT vehicle_name FROM dtc_logs")
+    vehicles = [row[0] for row in c.fetchall()]
+    conn.close()
+    return vehicles
+
 # Sidebar setup
 st.sidebar.title("FLEET NEXIS DTC INTERPRETER")
 st.sidebar.divider()
@@ -34,6 +44,15 @@ st.sidebar.divider()
 # Add date pickers
 start_date = st.sidebar.date_input("Start Date", datetime.now().replace(day=1))
 end_date = st.sidebar.date_input("End Date", datetime.now())
+st.sidebar.divider()
+
+# Add vehicle filter
+vehicles = get_unique_vehicles()
+selected_vehicle = st.sidebar.selectbox(
+    "Filter by Vehicle",
+    ["All Vehicles"] + vehicles,
+    index=0
+)
 st.sidebar.divider()
 
 # Database initialization and migration
@@ -56,6 +75,7 @@ def init_db():
                     gps_coordinates TEXT,
                     location_address TEXT,
                     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    email_timestamp TEXT,
                     raw_email TEXT
                  )''')
     else:
@@ -66,6 +86,7 @@ def init_db():
             'gps_coordinates': 'TEXT',
             'location_address': 'TEXT',
             'timestamp': 'DATETIME DEFAULT CURRENT_TIMESTAMP',
+            'email_timestamp': 'TEXT',
             'raw_email': 'TEXT'
         }
         
@@ -127,9 +148,13 @@ def fetch_emails():
                     else:
                         email_body = msg.get_payload(decode=True).decode()
                     
+                    # Extract email timestamp
+                    email_date = parsedate_to_datetime(msg.get('date'))
+                    
                     entry = extract_dtc_info(email_body)
                     if entry:
                         entry["raw_email"] = email_body
+                        entry["email_timestamp"] = email_date.strftime("%Y-%m-%d %I:%M:%S %p")
                         dtc_entries.append(entry)
                         debug_info.append(f"Successfully processed email: {subject}")
         
@@ -148,13 +173,17 @@ def fetch_emails():
 # Extract DTC info from email body
 def extract_dtc_info(text):
     match = re.search(r'Device: (.*?)\nEvent: (.*?)\nSpeed:', text, re.DOTALL)
+    time_match = re.search(r'Time: (.*?)\n', text)
+    
     if match:
         vehicle_name = match.group(1).strip()
         dtc_text = match.group(2).strip()
+        timestamp = time_match.group(1).strip() if time_match else "N/A"
         
         return {
             "vehicle_name": vehicle_name,
             "dtc_text": dtc_text,
+            "timestamp": timestamp,
             "gps_coordinates": "N/A",
             "location_address": "N/A",
             "raw_email": text
@@ -179,22 +208,26 @@ def interpret_dtc(dtc_text, status_placeholder):
         return "Error interpreting DTC code"
 
 # Save to database
-def save_to_db(vehicle_name, dtc_text, ai_interpretation, gps_coordinates, location_address, raw_email):
+def save_to_db(vehicle_name, dtc_text, ai_interpretation, gps_coordinates, location_address, raw_email, email_timestamp):
     conn = sqlite3.connect("dtc_logs.db")
     c = conn.cursor()
     c.execute("""
         INSERT INTO dtc_logs 
-        (vehicle_name, dtc_text, ai_interpretation, gps_coordinates, location_address, raw_email) 
-        VALUES (?, ?, ?, ?, ?, ?)
-    """, (vehicle_name, dtc_text, ai_interpretation, gps_coordinates, location_address, raw_email))
+        (vehicle_name, dtc_text, ai_interpretation, gps_coordinates, location_address, raw_email, email_timestamp) 
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (vehicle_name, dtc_text, ai_interpretation, gps_coordinates, location_address, raw_email, email_timestamp))
     conn.commit()
     conn.close()
 
 # Display DTC entry
 def display_dtc_entry(entry, show_raw=False):
-    st.markdown(f"### {entry['vehicle_name']}")
-    if 'timestamp' in entry:  # Only show timestamp for database entries
-        st.markdown(f"**Date:** {entry['timestamp']}")
+    st.markdown("### DTC Alert Details")
+    st.markdown(f"**Vehicle Name:** {entry['vehicle_name']}")
+    
+    # Display timestamp
+    if 'email_timestamp' in entry:
+        st.markdown(f"**Alert Received:** {entry['email_timestamp']}")
+    
     st.markdown("**Interpretation:**")
     st.markdown(entry['ai_interpretation'])
     
@@ -226,7 +259,8 @@ if fetch_analyze:
                     ai_result,
                     entry["gps_coordinates"],
                     entry["location_address"],
-                    entry["raw_email"]
+                    entry["raw_email"],
+                    entry["email_timestamp"]
                 )
                 
                 # Display current analysis results
@@ -234,7 +268,8 @@ if fetch_analyze:
                 current_entry = {
                     'vehicle_name': entry['vehicle_name'],
                     'ai_interpretation': ai_result,
-                    'raw_email': entry['raw_email']
+                    'raw_email': entry['raw_email'],
+                    'email_timestamp': entry['email_timestamp']
                 }
                 display_dtc_entry(current_entry, show_raw)
                 
@@ -246,17 +281,24 @@ if fetch_analyze:
 if show_history:
     st.subheader("DTC History")
     conn = sqlite3.connect("dtc_logs.db")
-    query = """
-        SELECT * FROM dtc_logs 
-        WHERE DATE(timestamp) BETWEEN ? AND ?
-        ORDER BY timestamp DESC
-    """
-    df = pd.read_sql_query(
-        query, 
-        conn,
-        params=(start_date, end_date),
-        parse_dates=['timestamp']
-    )
+    
+    if selected_vehicle == "All Vehicles":
+        query = """
+            SELECT * FROM dtc_logs 
+            WHERE DATE(timestamp) BETWEEN ? AND ?
+            ORDER BY timestamp DESC
+        """
+        params = (start_date, end_date)
+    else:
+        query = """
+            SELECT * FROM dtc_logs 
+            WHERE DATE(timestamp) BETWEEN ? AND ?
+            AND vehicle_name = ?
+            ORDER BY timestamp DESC
+        """
+        params = (start_date, end_date, selected_vehicle)
+    
+    df = pd.read_sql_query(query, conn, params=params, parse_dates=['timestamp'])
     conn.close()
 
     if not df.empty:
@@ -264,4 +306,4 @@ if show_history:
         for _, row in df.iterrows():
             display_dtc_entry(row, show_raw)
     else:
-        st.info(f"No DTC history found between {start_date} and {end_date}")
+        st.info(f"No DTC history found for the selected criteria")
