@@ -197,7 +197,7 @@ def interpret_dtc(dtc_text, status_placeholder):
         response = client.chat.completions.create(
             model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are an expert vehicle diagnostic assistant. Provide direct interpretations without disclaimers or recommendations to consult mechanics."},
+                {"role": "system", "content": "You are an expert vehicle diagnostic assistant. Provide direct interpretations without disclaimers or recommendations to consult mechanics. Provide Ai Recommendations" on next steps"},
                 {"role": "user", "content": f"What do these diagnostic trouble codes mean: {dtc_text}?"}
             ]
         )
